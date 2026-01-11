@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADVISOR
+  TECH
+}
+
+enum JobState {
+  CHECKED_IN
+  DIAGNOSIS
+  WAITING_APPROVAL
+  APPROVED_READY
+  IN_REPAIR
+  WAITING_PARTS
+  QUALITY_CHECK
+  READY_PICKUP
+  CLOSED
+}
+
+enum JobPriority {
+  LOW
+  NORMAL
+  HIGH
+}
+
+enum LineItemType {
+  LABOR
+  PART
+  FEE
+}
+
+enum LineItemStatus {
+  PROPOSED
+  APPROVED
+  DECLINED
+}
+
+enum MediaType {
+  PHOTO
+  VIDEO
+}
+
+enum ApprovalStatus {
+  DRAFT
+  SENT
+  APPROVED
+  PARTIAL
+  DECLINED
+}
+
+enum JobEventType {
+  STATE_CHANGE
+  NOTE
+  APPROVAL_SENT
+  APPROVAL_DECIDED
+}
+
+model Shop {
+  id        String   @id @default(cuid())
+  name      String
+  timezone  String
+  createdAt DateTime @default(now())
+
+  users     User[]
+  customers Customer[]
+  vehicles  Vehicle[]
+  jobs      Job[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  shopId       String
+  shop         Shop     @relation(fields: [shopId], references: [id])
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  assignedJobs Job[]    @relation("AssignedTech")
+  events       JobEvent[]
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id])
+  name      String
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+
+  vehicles  Vehicle[]
+  jobs      Job[]
+}
+
+model Vehicle {
+  id         String   @id @default(cuid())
+  shopId     String
+  shop       Shop     @relation(fields: [shopId], references: [id])
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  year       Int?
+  make       String?
+  model      String?
+  trim       String?
+  vin        String?
+  plate      String?
+  odometer   Int?
+  createdAt  DateTime @default(now())
+
+  jobs       Job[]
+}
+
+model Job {
+  id             String       @id @default(cuid())
+  shopId         String
+  shop           Shop         @relation(fields: [shopId], references: [id])
+  jobNumber      Int
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  vehicleId      String
+  vehicle        Vehicle      @relation(fields: [vehicleId], references: [id])
+  title          String
+  state          JobState
+  priority       JobPriority
+  assignedTechId String?
+  assignedTech   User?        @relation("AssignedTech", fields: [assignedTechId], references: [id])
+  promisedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  closedAt       DateTime?
+
+  lineItems       LineItem[]
+  media           InspectionMedia[]
+  approvalRequest ApprovalRequest?
+  events          JobEvent[]
+
+  @@unique([shopId, jobNumber])
+  @@index([shopId, state])
+}
+
+model LineItem {
+  id         String         @id @default(cuid())
+  jobId      String
+  job        Job            @relation(fields: [jobId], references: [id])
+  type       LineItemType
+  name       String
+  qty        Int
+  unitPrice  Int
+  laborHours Float?
+  taxable    Boolean
+  status     LineItemStatus
+  sortOrder  Int
+}
+
+model InspectionMedia {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id])
+  type      MediaType
+  url       String
+  caption   String?
+}
+
+model ApprovalRequest {
+  id                String         @id @default(cuid())
+  jobId             String         @unique
+  job               Job            @relation(fields: [jobId], references: [id])
+  status            ApprovalStatus
+  sentAt            DateTime?
+  decidedAt         DateTime?
+  customerTokenHash String
+}
+
+model JobEvent {
+  id        String       @id @default(cuid())
+  jobId     String
+  job       Job          @relation(fields: [jobId], references: [id])
+  type      JobEventType
+  payload   Json
+  createdAt DateTime     @default(now())
+  actorId   String?
+  actor     User?        @relation(fields: [actorId], references: [id])
+
+  @@index([jobId, createdAt])
+}
